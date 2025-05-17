@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Analysis Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .result-item {
+            margin-bottom: 10px;
+        }
+        .section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <h1>Text Analysis Tool</h1>
+    
+    <div>
+        <h2>Text Analysis</h2>
+        <textarea id="textInput" placeholder="Enter your text here..."></textarea>
+        <div>
+            <button onclick="analyzeText()">Analyze Text</button>
+            <button onclick="saveAnalysis()">Save Analysis</button>
+            <button onclick="loadHistory()">Load History</button>
+        </div>
+        
+        <div id="results">
+            <h3>Analysis Results:</h3>
+            <div class="result-item">Characters: <span id="charCount">0</span></div>
+            <div class="result-item">Words: <span id="wordCount">0</span></div>
+            <div class="result-item">Paragraphs: <span id="paraCount">0</span></div>
+            <div class="result-item">Spaces: <span id="spaceCount">0</span></div>
+            <div class="result-item">Last Saved: <span id="lastSaved">Never</span></div>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>API Analysis</h2>
+        <p>You can also use our API endpoints:</p>
+        <ul>
+            <li><code>POST /api/analyze</code> - Analyze and save text</li>
+            <li><code>GET /api/history</code> - Get analysis history</li>
+        </ul>
+        <button onclick="testApi()">Test Analysis API</button>
+        <button onclick="testHistoryApi()">Test History API</button>
+        <div id="apiResults" style="margin-top: 15px;"></div>
+    </div>
+
+    <div class="section">
+        <h2>Analysis History</h2>
+        <div id="historyResults"></div>
+    </div>
+
+    <script>
+        let lastAnalysis = null;
+
+        function analyzeText() {
+            const text = document.getElementById('textInput').value;
+            
+            // Character count
+            document.getElementById('charCount').textContent = text.length;
+            
+            // Word count
+            const words = text.trim() === '' ? [] : text.trim().split(/\s+/);
+            document.getElementById('wordCount').textContent = words.length;
+            
+            // Paragraph count
+            const paragraphs = text.trim() === '' ? [] : text.split(/\n+/);
+            document.getElementById('paraCount').textContent = paragraphs.length;
+            
+            // Space count
+            const spaces = (text.match(/ /g) || []).length;
+            document.getElementById('spaceCount').textContent = spaces;
+            
+            // Store last analysis
+            lastAnalysis = {
+                text,
+                characterCount: text.length,
+                wordCount: words.length,
+                paragraphCount: paragraphs.length,
+                spaceCount: spaces
+            };
+        }
+        
+        async function saveAnalysis() {
+            if (!lastAnalysis) {
+                alert('Please analyze some text first');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: lastAnalysis.text })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('lastSaved').textContent = new Date(data.analysis.savedAt).toLocaleString();
+                    loadHistory();
+                } else {
+                    throw new Error(data.message || 'Failed to save analysis');
+                }
+            } catch (error) {
+                document.getElementById('apiResults').innerHTML = `
+                    <p style="color: red;">Error: ${error.message}</p>
+                `;
+            }
+        }
+        
+        async function loadHistory() {
+            try {
+                const response = await fetch('/api/history');
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayHistory(data.history);
+                } else {
+                    throw new Error(data.message || 'Failed to load history');
+                }
+            } catch (error) {
+                document.getElementById('historyResults').innerHTML = `
+                    <p style="color: red;">Error: ${error.message}</p>
+                `;
+            }
+        }
+        
+        function displayHistory(history) {
+            if (history.length === 0) {
+                document.getElementById('historyResults').innerHTML = '<p>No analysis history found</p>';
+                return;
+            }
+            
+            let html = '<table><tr><th>Date</th><th>Characters</th><th>Words</th><th>Paragraphs</th><th>Spaces</th></tr>';
+            
+            history.forEach(item => {
+                html += `
+                    <tr>
+                        <td>${new Date(item.createdAt).toLocaleString()}</td>
+                        <td>${item.characterCount}</td>
+                        <td>${item.wordCount}</td>
+                        <td>${item.paragraphCount}</td>
+                        <td>${item.spaceCount}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</table>';
+            document.getElementById('historyResults').innerHTML = html;
+        }
+        
+        function testApi() {
+            const text = document.getElementById('textInput').value || "This is a sample text for API testing.";
+            
+            fetch('/api/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text: text })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('apiResults').innerHTML = `
+                    <h3>API Response:</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            })
+            .catch(error => {
+                document.getElementById('apiResults').innerHTML = `
+                    <p style="color: red;">Error: ${error.message}</p>
+                `;
+            });
+        }
+        
+        function testHistoryApi() {
+            fetch('/api/history')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('apiResults').innerHTML = `
+                    <h3>History API Response:</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            })
+            .catch(error => {
+                document.getElementById('apiResults').innerHTML = `
+                    <p style="color: red;">Error: ${error.message}</p>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>
